@@ -372,7 +372,6 @@ if __name__ == "__main__":
     #print(dataLMC)
     #print(dataPrensilia)     
     #print(ite)  
-
     
     fig, axs = plt.subplots(5)
 
