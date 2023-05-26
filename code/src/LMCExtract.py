@@ -365,6 +365,7 @@ if __name__ == "__main__":
 
     #print(dataLMC)
     #print(dataPrensilia)
+    #print(dataPrensilia)
 
     dataLMC=np.concatenate((ite,dataLMC),axis=1)
     dataPrensilia=np.concatenate((ite,dataPrensilia),axis=1)
