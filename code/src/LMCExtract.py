@@ -5,6 +5,7 @@
 
 import os, sys, _thread, time, inspect, socket, threading
 
+### Leap Directory ###
 src_dir = os.path.dirname(inspect.getfile(inspect.currentframe()))
 arch_dir = '../win64'
 
@@ -21,16 +22,19 @@ import time
 import math
 import csv
 
+
+### Serial Initialization ###
 import serial.tools.list_ports
 
 def getHex(dataint):
     dataHex = str()
     if dataint<16:
         dataHex="0"+format(dataint,'x')
+    elif dataint>255:
+        dataHex="ff"
     else: 
         dataHex=format(dataint,'x')
     return dataHex
-
 
 ports = serial.tools.list_ports.comports()
 serialInst = serial.Serial()
@@ -39,12 +43,13 @@ serialInst.baudrate = 115200
 serialInst.port = "COM3"
 serialInst.open()
 
-
+### Variabel Initialization ###
 myList = []
 myNp =np.zeros(shape=(4,3))
 M0 = np.zeros(shape=(1,3))
 
-hd_prop = np.zeros(shape=(3,3)) #armdir; wrist position; elbow position
+hand_prop = np.zeros(shape=(3,3)) #hand direction, palm normal, palm position
+arm_prop = np.zeros(shape=(3,3)) #armdir; wrist position; elbow position
 fr_thumb =np.zeros(shape=(5,3)) #metacarpal prev joint; metacarpal next joint, proximal next joint; intermediate next joint; distal next joint
 fr_index =np.zeros(shape=(5,3))
 fr_middle =np.zeros(shape=(5,3))
@@ -66,6 +71,7 @@ ax.view_init(0, 0)
 ax.scatter(0, 0, 0, c='red')
 '''
 
+### Leap Data Acquriing Function ###
 def getDataValue(string):
     cleanString = str()
     string = str(string)
@@ -75,29 +81,59 @@ def getDataValue(string):
     cleanList = [float(i) for i in cleanString.split(',')]
     return  cleanList
 
-def VectRes(A : list, B : list ):
+### Vector and Angle Degree Calculation Function ###
+#calculate vector from coodinates (A, B : coordinate)
+def VectResult(A : list, B : list ):       
     return B-A
 
+#calculate result of dot product from vector (A, B : vector) / coordinates with base from center (0,0,0)
 def VectDot(A : list, B : list ):
     result=A[0]*B[0]+A[1]*B[1]+A[2]*B[2]
     return result
 
-def VectMag(A : list, B : list ):
+#calculate magnitude of vector from coordinates (A, B : coordinate)
+def VectMag_Coord(A : list, B : list ):
     result=math.sqrt((B[0]-A[0])*(B[0]-A[0])+(B[1]-A[1])*(B[1]-A[1])+(B[2]-A[2])*(B[2]-A[2]))
+    return result    
+
+#calculate degree from Coordinate (A, B, C : coordinate) 
+def DegCalc_Coord(A : list, B : list, C : list ):
+    divider= VectMag_Coord(A, B) * VectMag_Coord(B, C)    
+    if divider==0:
+        return 0
+    else:
+        result=math.acos((VectDot(VectResult(A, B), VectResult(B, C)) /( divider )))
+        return result
+
+#calculate degree from Coordinate 4 point (A, B, C, D : coordinate) 
+def DegCalc_Coord4point(A : list, B : list, C : list, D : list ):
+    divider = VectMag_Coord(A, B) * VectMag_Coord(C, D)    
+    if divider==0:
+        return 0
+    else:
+        result=math.acos((VectDot(VectResult(A, B), VectResult(C, D)) /( divider )))
+        return result
+
+#calculate magnitude of vector (A, B : vector)
+def VectMag(A : list):
+    result=math.sqrt(A[0]*A[0]+A[1]*A[1]+A[2]*A[2])
     return result
 
-def DegCalc(A : list, B : list, C : list ):
-    result=math.acos((VectDot(VectRes(A, B), VectRes(B, C)) /( VectMag(A, B) * VectMag(B, C) )))
-    return result
+#calculate degree from vector (A, B : vector)
+def DegCalc_Vect(A : list, B : list):
+    divider = VectMag(A) * VectMag(B)    
+    if divider==0:
+        return 0
+    else:
+        result=math.acos((VectDot(A, B) /( divider )))
+        return result
 
-def DegCalc4point(A : list, B : list, C : list, D : list ):
-    result=math.acos((VectDot(VectRes(A, B), VectRes(C, D)) /( VectMag(A, B) * VectMag(C, D) )))
-    return result
-
+#conver integer from Prensilia to degree (255 equal to 90 degree)
 def ConvInttoDeg(Data : int):
     result = Data * 0.35294
     return result
 
+### Send Serial Command Function ###
 def SendCmd(AngleData : float):
     if math.isnan(AngleData):
         result = 0
@@ -105,7 +141,7 @@ def SendCmd(AngleData : float):
         if AngleData<0 or AngleData > 1.5:
             result = 0
         else: 
-            result = AngleData*183.45
+            result = AngleData*183.45 #183.45 = 255 (hex) / 80 (maximum degree)
     return (int(result))
 
 def SendCmdThumb(AngleData : float):
@@ -117,7 +153,8 @@ def SendCmdThumb(AngleData : float):
         else: 
             #result = -209.016*AngleData+255 #70degree         
             #result = -324.84*AngleData+255 #45degree  
-            result = -292.43*AngleData+255 #50degree                     
+            #result = -292.43*AngleData+255 #50degree                     
+            result = AngleData*183.45
     return (int(result))
 
 def SendCmdThumbAb(AngleData : float):
@@ -129,10 +166,12 @@ def SendCmdThumbAb(AngleData : float):
         else:
             #result = -162.42*AngleData+255 #90degree          
             #result = -209.016*AngleData+255 #70degree         
-            result = -324.84*AngleData+255 #45degree  
+            #result = -324.84*AngleData+255 #45degree  
             #result = -292.43*AngleData+255 #50degree                  
+            result = AngleData*183.45
     return (int(result))
 
+### Main Program / LMC Listener ###
 class SampleListener(Leap.Listener):
 
     def on_connect(self, controller):
@@ -190,9 +229,13 @@ class SampleListener(Leap.Listener):
             #fFile.write("%f,%f,%f,%f,%f," % (PrensiliaData[0],PrensiliaData[1],PrensiliaData[2],PrensiliaData[3],PrensiliaData[4]))
 
             #convert and get data from LMC
-            hd_prop[0] = getDataValue(frame.hands[0].arm.direction)
-            hd_prop[1] = getDataValue(frame.hands[0].arm.wrist_position)
-            hd_prop[2] = getDataValue(frame.hands[0].arm.elbow_position)
+            hand_prop[0] = getDataValue(frame.hands[0].direction)
+            hand_prop[1] = getDataValue(frame.hands[0].palm_normal)
+            hand_prop[2] = getDataValue(frame.hands[0].palm_position)
+
+            arm_prop[0] = getDataValue(frame.hands[0].arm.direction)
+            arm_prop[1] = getDataValue(frame.hands[0].arm.wrist_position)
+            arm_prop[2] = getDataValue(frame.hands[0].arm.elbow_position)
 
             fr_thumb[0] = getDataValue(frame.hands[0].fingers[0].bone(0).prev_joint)
             fr_thumb[1] = getDataValue(frame.hands[0].fingers[0].bone(0).next_joint)
@@ -216,14 +259,16 @@ class SampleListener(Leap.Listener):
             fr_ring[1] = getDataValue(frame.hands[0].fingers[3].bone(0).next_joint)
             fr_ring[2] = getDataValue(frame.hands[0].fingers[3].bone(1).next_joint)
             fr_ring[3] = getDataValue(frame.hands[0].fingers[3].bone(2).next_joint)
-            fr_ring[4] = getDataValue(frame.hands[0].fingers[3].bone(3).next_joint)
+            fr_ring[4] = getDataValue(frame.hands[0].fingers[3].bone(3).next_joint)            
 
             #angle calculation
-            fr_angle [0] = DegCalc4point(hd_prop[1], fr_ring[0], hd_prop[1], fr_thumb[0])
-            fr_angle [1] = DegCalc4point(fr_thumb[1], fr_thumb[2], fr_index[0], fr_index[1])
-            fr_angle [2] = DegCalc(fr_index[0], fr_index[1], fr_index[2])
-            fr_angle [3] = DegCalc(fr_middle[0], fr_middle[1], fr_middle[2])
-            fr_angle [4] = DegCalc(fr_ring[0], fr_ring[1], fr_ring[2])
+            #fr_angle [0] =DegCalc_Coord4point(arm_prop[1], fr_ring[0], arm_prop[1], fr_thumb[0])
+            fr_angle [0] = DegCalc_Vect(VectResult(fr_thumb[1],fr_thumb[2]), hand_prop[1])
+            #fr_angle [1] = DegCalc_Coord4point(fr_thumb[1], fr_thumb[2], fr_index[0], fr_index[1])
+            fr_angle [1] = DegCalc_Coord4point(fr_thumb[2], fr_thumb[3], fr_thumb[3], fr_thumb[4])
+            fr_angle [2] = DegCalc_Coord(fr_index[0], fr_index[1], fr_index[2])
+            fr_angle [3] = DegCalc_Coord(fr_middle[0], fr_middle[1], fr_middle[2])
+            fr_angle [4] = DegCalc_Coord(fr_ring[0], fr_ring[1], fr_ring[2])
 
             #fFile.write("%f,%f,%f,%f,%f" % (fr_angle[0],fr_angle[1],fr_angle[2],fr_angle[3],fr_angle[4]))
             fr_angle_deg [0]=math.degrees(fr_angle[0])
@@ -233,7 +278,7 @@ class SampleListener(Leap.Listener):
             fr_angle_deg [4]=math.degrees(fr_angle[4])
             fFile.write("%f,%f,%f,%f,%f" % (fr_angle_deg[0],fr_angle_deg[1],fr_angle_deg[2],fr_angle_deg[3],fr_angle_deg[4]))
             fFile.write("\n")
-
+            
             ##For Plot
             '''
             ax.clear()
@@ -260,10 +305,10 @@ class SampleListener(Leap.Listener):
             RangeCommand = int (RangeAzu)
             print(RangeCommand)
             '''
-
+            
             #SendCommand to Motor 0 / thumb ab/ad
             dataTemp="4400"+getHex(SendCmdThumbAb(fr_angle[0]))           
-            serialInst.write(bytes.fromhex(dataTemp))
+            serialInst.write(bytes.fromhex(dataTemp))            
             #SendCommand to Motor 1 / thumb flex
             dataTemp="4401"+getHex(SendCmdThumb(fr_angle[1]))
             serialInst.write(bytes.fromhex(dataTemp))
@@ -278,7 +323,15 @@ class SampleListener(Leap.Listener):
             serialInst.write(bytes.fromhex(dataTemp))
                         
             time.sleep(0.2)
-                        
+            '''
+            #SendCommand to Motor 0 / thumb ab/ad
+            dataTemp="4400"+getHex(255)           
+            serialInst.write(bytes.fromhex(dataTemp))
+            #SendCommand to Motor 1 / thumb flex
+            dataTemp="4401"+getHex(90)
+            serialInst.write(bytes.fromhex(dataTemp))
+            '''
+
         except SystemError:
             pass
 
@@ -374,43 +427,52 @@ if __name__ == "__main__":
     #print(dataPrensilia)     
     #print(ite)  
     
-    fig, axs = plt.subplots(5)
+    fig, axs = plt.subplots(5, figsize=(12, 8))
+    
+    fig.subplots_adjust(hspace=0.6)
 
     axs[0].set_title('Thumb Abduction / Adduction')
-    axs[0].set_yticks(np.arange(0,90,10))
+    axs[0].set_ylim([0, 150])
+    axs[0].set_yticks(np.arange(0,150,25))
     axs[0].set_ylabel('Degree')
     axs[0].plot(dataLMC[:,0],dataLMC[:,1], label='LMC')
     axs[0].plot(dataPrensilia[:,0],dataPrensilia[:,1], label='Prensilia')
     
     axs[1].set_title('Thumb Flexion')
-    axs[1].set_yticks(np.arange(0,90,10))
+    axs[1].set_ylim([0, 90])
+    axs[1].set_yticks(np.arange(0,90,25))
     axs[1].set_ylabel('Degree')
     axs[1].plot(dataLMC[:,0],dataLMC[:,2], label='LMC')
     axs[1].plot(dataPrensilia[:,0],dataPrensilia[:,2], label='Prensilia')
     
     axs[2].set_title('Index Finger Flexion')
-    axs[2].set_yticks(np.arange(0,90,10))
+    axs[2].set_ylim([0, 90])
+    axs[2].set_yticks(np.arange(0,90,25))
     axs[2].set_ylabel('Degree')
     axs[2].plot(dataLMC[:,0],dataLMC[:,3], label='LMC')
     axs[2].plot(dataPrensilia[:,0],dataPrensilia[:,3], label='Prensilia')
     
     axs[3].set_title('Middle Finger Flexion')
+    axs[3].set_ylim([0, 90])
     axs[3].set_ylabel('Degree')
-    axs[3].set_yticks(np.arange(0,90,10))
+    axs[3].set_yticks(np.arange(0,90,25))
     axs[3].plot(dataLMC[:,0],dataLMC[:,4], label='LMC')
     axs[3].plot(dataPrensilia[:,0],dataPrensilia[:,4], label='Prensilia')
     
     axs[4].set_title('Ring / Little Finger Flexion')
+    axs[4].set_ylim([0, 90])
     axs[4].set_ylabel('Degree')
-    axs[4].set_yticks(np.arange(0,90,10))
+    axs[4].set_yticks(np.arange(0,90,25))
     axs[4].plot(dataLMC[:,0],dataLMC[:,5], label='LMC')
     axs[4].plot(dataPrensilia[:,0],dataPrensilia[:,5], label='Prensilia')
     
     
     fig.suptitle('Joint Angle of Fingers from Leap Motion Controller vs from Prensilia Hand Robot')
-    axs[0].legend()
-    axs[1].legend()
-    axs[2].legend()
-    axs[3].legend()
-    axs[4].legend()
+    axs[0].legend(loc='upper left')
+    axs[1].legend(loc='upper left')
+    axs[2].legend(loc='upper left')
+    axs[3].legend(loc='upper left')
+    axs[4].legend(loc='upper left')
+
+    fig.canvas.manager.set_window_title('Data%s' % countFile)
     plt.show()
