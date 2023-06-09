@@ -262,7 +262,6 @@ class SampleListener(Leap.Listener):
             fr_ring[4] = getDataValue(frame.hands[0].fingers[3].bone(3).next_joint)            
 
             #angle calculation
-            #fr_angle [0] =DegCalc_Coord4point(arm_prop[1], fr_ring[0], arm_prop[1], fr_thumb[0])
             fr_angle [0] = DegCalc_Vect(VectResult(fr_thumb[1],fr_thumb[2]), hand_prop[1])
             #fr_angle [1] = DegCalc_Coord4point(fr_thumb[1], fr_thumb[2], fr_index[0], fr_index[1])
             fr_angle [1] = DegCalc_Coord4point(fr_thumb[2], fr_thumb[3], fr_thumb[3], fr_thumb[4])
